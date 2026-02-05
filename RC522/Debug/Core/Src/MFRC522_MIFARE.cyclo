@@ -1,0 +1,15 @@
+../Core/Src/MFRC522_MIFARE.c:20:16:calc_crc	4
+../Core/Src/MFRC522_MIFARE.c:45:16:communicate_with_picc	13
+../Core/Src/MFRC522_MIFARE.c:97:16:picc_reqa_wupa	4
+../Core/Src/MFRC522_MIFARE.c:115:9:MFRC522_PICC_RequestA	1
+../Core/Src/MFRC522_MIFARE.c:120:9:MFRC522_PICC_WakeupA	1
+../Core/Src/MFRC522_MIFARE.c:125:9:MFRC522_PICC_AnticollCL1	4
+../Core/Src/MFRC522_MIFARE.c:150:9:MFRC522_SelectCL1_GetSAK	5
+../Core/Src/MFRC522_MIFARE.c:179:16:mifare_auth	4
+../Core/Src/MFRC522_MIFARE.c:205:9:MFRC522_MifareAuthKeyA	1
+../Core/Src/MFRC522_MIFARE.c:210:9:MFRC522_MifareAuthKeyB	1
+../Core/Src/MFRC522_MIFARE.c:215:9:MFRC522_MifareReadBlock16	4
+../Core/Src/MFRC522_MIFARE.c:239:16:is_ack4bits	3
+../Core/Src/MFRC522_MIFARE.c:245:9:MFRC522_MifareWriteBlock16	9
+../Core/Src/MFRC522_MIFARE.c:283:6:MFRC522_StopCrypto1	1
+../Core/Src/MFRC522_MIFARE.c:288:9:MFRC522_PICC_HaltA	3

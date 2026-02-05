@@ -1,0 +1,15 @@
+../Core/Src/MFRC522_MIFARE.c:46:16:calc_crc	48	static
+../Core/Src/MFRC522_MIFARE.c:78:16:communicate_with_picc	48	static
+../Core/Src/MFRC522_MIFARE.c:134:9:MFRC522_PICC_RequestA	56	static
+../Core/Src/MFRC522_MIFARE.c:148:9:MFRC522_PICC_WakeupA	56	static
+../Core/Src/MFRC522_MIFARE.c:161:9:MFRC522_PICC_Anticoll_CL1	56	static
+../Core/Src/MFRC522_MIFARE.c:181:9:MFRC522_PICC_AnticollCL1	56	static
+../Core/Src/MFRC522_MIFARE.c:202:9:MFRC522_SelectCL1	80	static
+../Core/Src/MFRC522_MIFARE.c:230:9:MFRC522_PICC_HaltA	64	static
+../Core/Src/MFRC522_MIFARE.c:253:9:MFRC522_MifareAuthKeyA	72	static
+../Core/Src/MFRC522_MIFARE.c:270:9:MFRC522_MifareAuthKeyB	72	static
+../Core/Src/MFRC522_MIFARE.c:287:9:MFRC522_MifareReadBlock16	96	static
+../Core/Src/MFRC522_MIFARE.c:307:16:is_ack	16	static
+../Core/Src/MFRC522_MIFARE.c:317:9:MFRC522_MifareWriteBlock16	96	static
+../Core/Src/MFRC522_MIFARE.c:352:6:MFRC522_StopCrypto1	16	static
+../Core/Src/MFRC522_MIFARE.c:358:9:MFRC522_WaitCardRemoval	24	static

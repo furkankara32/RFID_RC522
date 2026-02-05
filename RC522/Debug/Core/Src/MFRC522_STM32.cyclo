@@ -1,0 +1,9 @@
+../Core/Src/MFRC522_STM32.c:4:20:cs_low	1
+../Core/Src/MFRC522_STM32.c:5:20:cs_high	1
+../Core/Src/MFRC522_STM32.c:7:6:MFRC522_WriteReg	1
+../Core/Src/MFRC522_STM32.c:18:9:MFRC522_ReadReg	1
+../Core/Src/MFRC522_STM32.c:31:6:MFRC522_SetBitMask	1
+../Core/Src/MFRC522_STM32.c:37:6:MFRC522_ClearBitMask	1
+../Core/Src/MFRC522_STM32.c:43:13:antenna_on	2
+../Core/Src/MFRC522_STM32.c:51:13:soft_reset	3
+../Core/Src/MFRC522_STM32.c:62:6:MFRC522_Init	2

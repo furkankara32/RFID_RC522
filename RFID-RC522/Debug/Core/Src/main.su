@@ -1,0 +1,13 @@
+../Core/Src/main.c:68:5:_write	24	static
+../Core/Src/main.c:85:13:make_token_from_password	32	static
+../Core/Src/main.c:99:12:token_has_pw	16	static
+../Core/Src/main.c:106:13:print_token_pw	32	static
+../Core/Src/main.c:114:13:handle_line	16	static
+../Core/Src/main.c:136:13:process_card_once	104	static
+../Core/Src/main.c:235:5:main	8	static
+../Core/Src/main.c:298:6:SystemClock_Config	88	static
+../Core/Src/main.c:352:13:MX_SPI1_Init	8	static
+../Core/Src/main.c:392:13:MX_USART3_UART_Init	8	static
+../Core/Src/main.c:427:13:MX_GPIO_Init	40	static
+../Core/Src/main.c:455:6:HAL_UART_RxCpltCallback	24	static
+../Core/Src/main.c:480:6:Error_Handler	4	static,ignoring_inline_asm

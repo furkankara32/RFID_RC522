@@ -1,0 +1,14 @@
+../Core/Src/main.c:62:5:_write	1
+../Core/Src/main.c:70:12:token_has_pw	4
+../Core/Src/main.c:77:13:token_get_pw	2
+../Core/Src/main.c:85:13:leds_ok	1
+../Core/Src/main.c:91:13:leds_fail	1
+../Core/Src/main.c:97:13:leds_idle	1
+../Core/Src/main.c:103:13:waitcardRemoval	3
+../Core/Src/main.c:119:13:process_card_once_verify	9
+../Core/Src/main.c:203:5:main	1
+../Core/Src/main.c:270:6:SystemClock_Config	3
+../Core/Src/main.c:312:13:MX_SPI1_Init	2
+../Core/Src/main.c:352:13:MX_USART3_UART_Init	2
+../Core/Src/main.c:387:13:MX_GPIO_Init	1
+../Core/Src/main.c:443:6:Error_Handler	1
