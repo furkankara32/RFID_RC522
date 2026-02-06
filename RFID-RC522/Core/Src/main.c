@@ -78,37 +78,63 @@ static volatile uint8_t lineReady = 0;
 static char lineBuf[80];
 static volatile uint16_t lineLen = 0;
 
-static uint8_t pendingToken[16];
-static volatile uint8_t pendingWrite = 0;
+typedef enum {
+    APP_WAIT_CARD = 0,
+    APP_ASK_ACTION,
+    APP_ASK_BLOCK,
+    APP_ASK_DATA,
+    APP_DO_READ,
+    APP_DO_WRITE,
+    APP_WAIT_REMOVE
+} app_state_t;
 
-/* --- Token helper (PW + len + ascii) --- */
-static void make_token_from_password(const char *pw, uint8_t out16[16], uint8_t *usedLen)
+typedef enum {
+    APP_ACTION_READ = 0,
+    APP_ACTION_WRITE
+} app_action_t;
+
+static app_state_t appState = APP_WAIT_CARD;
+static app_action_t appAction = APP_ACTION_READ;
+static uint8_t selectedSector = 0;
+static uint8_t selectedBlock = 0;
+static uint8_t selectedBlockAbs = 0;
+static uint8_t writeBuffer[16];
+
+static void print_welcome(void)
 {
-    memset(out16, 0x00, 16);
-    out16[0] = 'P';
-    out16[1] = 'W';
-
-    size_t n = strlen(pw);
-    if (n > 13) n = 13;          // 16 byte içinde header var
-    out16[2] = (uint8_t)n;
-    memcpy(&out16[3], pw, n);
-
-    if (usedLen) *usedLen = (uint8_t)n;
+    printf("\r\n=== MFRC522 MIFARE CLASSIC 1K MENU ===\r\n");
+    printf("Kart okutmanizi bekliyorum...\r\n");
 }
 
-static int token_has_pw(const uint8_t t[16])
+static void print_action_prompt(void)
 {
-    if (t[0] != 'P' || t[1] != 'W') return 0;
-    if (t[2] > 13) return 0;
+    printf("\r\nIslem secin: Okuma (R) / Yazma (W)\r\n");
+}
+
+static void print_block_prompt(void)
+{
+    printf("Hedef blok format: s,<sektor>:b,<blok>\r\n");
+    printf("Sektor 0-15, blok 0-3 (blok 3 trailer, kullanilmaz)\r\n");
+}
+
+static void print_data_prompt(void)
+{
+    printf("Yazilacak ASCII veri girin (max 16 karakter):\r\n");
+}
+
+static int parse_block_request(const char *line, uint8_t *sector, uint8_t *block)
+{
+    int s = -1;
+    int b = -1;
+    if (sscanf(line, "s,%d:b,%d", &s, &b) != 2) {
+        return 0;
+    }
+    if (s < 0 || s > 15 || b < 0 || b > 3) {
+        return 0;
+    }
+    *sector = (uint8_t)s;
+    *block = (uint8_t)b;
     return 1;
-}
-
-static void print_token_pw(const uint8_t t[16])
-{
-    uint8_t n = t[2];
-    char s[14] = {0};
-    memcpy(s, &t[3], n);
-    printf("TOKEN(PW): %s (len=%u)\r\n", s, n);
 }
 
 static void handle_line(void)
@@ -116,112 +142,146 @@ static void handle_line(void)
     if (!lineReady) return;
     lineReady = 0;
 
-    if (strncmp(lineBuf, "PSWRD:", 6) == 0) {
-        const char *pw = &lineBuf[6];
-
-        uint8_t usedLen = 0;
-        make_token_from_password(pw, pendingToken, &usedLen);
-        pendingWrite = 1;
-
-        printf("[CMD] PSWRD alindi: %s\r\n", pw);
-        printf("[CMD] Karti okutulu tut (token yazilacak)\r\n");
-    } else {
-        printf("[CMD] Bilinmeyen komut: %s\r\n", lineBuf);
-    }
-}
-
-
-
-
-static void process_card_once(void)
-{
-    uint8_t atqa[2] = {0};
-    uint8_t uid_bcc[5] = {0};
-    uint8_t uid4[4] = {0};
-
-    if (MFRC522_PICC_WakeupA(&rfid, atqa) != STATUS_OK && MFRC522_PICC_RequestA(&rfid, atqa) != STATUS_OK) return;
-    if (MFRC522_PICC_Anticoll_CL1(&rfid, uid_bcc) != STATUS_OK) return;
-
-    memcpy(uid4, uid_bcc, 4);
-    printf("\r\n[CARD] UID: %02X %02X %02X %02X\r\n", uid4[0], uid4[1], uid4[2], uid4[3]);
-    printf("[CARD] ATQA: %02X %02X\r\n", atqa[0], atqa[1]);
-
-    uint8_t sak = 0;
-    if (MFRC522_SelectCL1(&rfid, uid_bcc, &sak) == STATUS_OK) {
-        printf("[CARD] SAK: %02X\r\n", sak);
-    } else {
-        printf("[CARD] SELECT FAIL\r\n");
-        printf("[CARD] Kart kaldirilinca devam...\r\n");
-        MFRC522_WaitCardRemoval(&rfid);
+    if (appState == APP_ASK_ACTION) {
+        char c = (char)tolower((unsigned char)lineBuf[0]);
+        if (c == 'r') {
+            appAction = APP_ACTION_READ;
+            appState = APP_ASK_BLOCK;
+            print_block_prompt();
+        } else if (c == 'w') {
+            appAction = APP_ACTION_WRITE;
+            appState = APP_ASK_BLOCK;
+            print_block_prompt();
+        } else {
+            printf("Gecersiz secim. R ya da W girin.\r\n");
+        }
         return;
     }
 
-    const uint8_t keyA[6] = KEYA_DEFAULT_6B;
-
-    // 1) Önce TOKEN_BLOCK dene, olmazsa Block 1'e fallback
-    uint8_t blocks_to_try[2] = {TOKEN_BLOCK, 1};
-    uint8_t used_block = 0xFF;
-
-    for (int bi = 0; bi < 2; bi++) {
-        uint8_t b = blocks_to_try[bi];
-
-        uint8_t stAuth = MFRC522_MifareAuthKeyA(&rfid, b, keyA, uid4);
-        if (stAuth != STATUS_OK) {
-            printf("[AUTH] KeyA FAIL (Block %u). st=%u ErrorReg=0x%02X Status2Reg=0x%02X\r\n",
-                   b, stAuth, MFRC522_ReadReg(&rfid, PCD_ErrorReg), MFRC522_ReadReg(&rfid, PCD_Status2Reg));
-            continue;
+    if (appState == APP_ASK_BLOCK) {
+        uint8_t sector = 0;
+        uint8_t block = 0;
+        if (!parse_block_request(lineBuf, &sector, &block)) {
+            printf("Format hatali. Ornek: s,2:b,1\r\n");
+            print_block_prompt();
+            return;
         }
+        if (block == 3) {
+            printf("Blok 3 trailer bloktur. Lutfen 0-2 secin.\r\n");
+            print_block_prompt();
+            return;
+        }
+        selectedSector = sector;
+        selectedBlock = block;
+        selectedBlockAbs = (uint8_t)(sector * 4U + block);
+        printf("Secim: sektor %u blok %u (abs %u)\r\n",
+               selectedSector, selectedBlock, selectedBlockAbs);
 
-        used_block = b;
+        if (appAction == APP_ACTION_WRITE) {
+            appState = APP_ASK_DATA;
+            print_data_prompt();
+        } else {
+            appState = APP_DO_READ;
+        }
+        return;
+    }
 
-        // Token oku (aynı auth oturumunda)
-        uint8_t tok[16] = {0};
-        if (MFRC522_MifareReadBlock16(&rfid, b, tok) == STATUS_OK) {
-            if (token_has_pw(tok)) {
-                print_token_pw(tok);
+    if (appState == APP_ASK_DATA) {
+        size_t len = strlen(lineBuf);
+        if (len > sizeof(writeBuffer)) {
+            printf("Veri cok uzun (%u). 16 karakterden kisa girin.\r\n", (unsigned int)len);
+            print_data_prompt();
+            return;
+        }
+        memset(writeBuffer, 0x00, sizeof(writeBuffer));
+        memcpy(writeBuffer, lineBuf, len);
+        appState = APP_DO_WRITE;
+        return;
+    }
+}
+
+static uint8_t read_card_uid(uint8_t uid4[4], uint8_t atqa[2], uint8_t *sak)
+{
+    uint8_t uid_bcc[5] = {0};
+    if (MFRC522_PICC_WakeupA(&rfid, atqa) != STATUS_OK &&
+        MFRC522_PICC_RequestA(&rfid, atqa) != STATUS_OK) {
+        return STATUS_ERROR;
+    }
+    if (MFRC522_PICC_Anticoll_CL1(&rfid, uid_bcc) != STATUS_OK) {
+        return STATUS_ERROR;
+    }
+    memcpy(uid4, uid_bcc, 4);
+    if (MFRC522_SelectCL1(&rfid, uid_bcc, sak) != STATUS_OK) {
+        return STATUS_ERROR;
+    }
+    return STATUS_OK;
+}
+
+static void process_card_operation(void)
+{
+    uint8_t atqa[2] = {0};
+    uint8_t uid4[4] = {0};
+    uint8_t sak = 0;
+
+    if (read_card_uid(uid4, atqa, &sak) != STATUS_OK) {
+        printf("Kart bulunamadi. Lutfen tekrar okutun.\r\n");
+        appState = APP_WAIT_CARD;
+        print_welcome();
+        return;
+    }
+
+    printf("\r\n[CARD] UID: %02X %02X %02X %02X\r\n", uid4[0], uid4[1], uid4[2], uid4[3]);
+    printf("[CARD] ATQA: %02X %02X SAK: %02X\r\n", atqa[0], atqa[1], sak);
+
+    const uint8_t keyA[6] = KEYA_DEFAULT_6B;
+    uint8_t stAuth = MFRC522_MifareAuthKeyA(&rfid, selectedBlockAbs, keyA, uid4);
+    if (stAuth != STATUS_OK) {
+        printf("[AUTH] KeyA FAIL (Block %u). st=%u ErrorReg=0x%02X Status2Reg=0x%02X\r\n",
+               selectedBlockAbs, stAuth, MFRC522_ReadReg(&rfid, PCD_ErrorReg),
+               MFRC522_ReadReg(&rfid, PCD_Status2Reg));
+        MFRC522_StopCrypto1(&rfid);
+        (void)MFRC522_PICC_HaltA(&rfid);
+        appState = APP_WAIT_CARD;
+        print_welcome();
+        return;
+    }
+
+    if (appAction == APP_ACTION_READ) {
+        uint8_t data[16] = {0};
+        if (MFRC522_MifareReadBlock16(&rfid, selectedBlockAbs, data) == STATUS_OK) {
+            printf("[READ] OK. Veri: \"");
+            for (int i = 0; i < 16; i++) {
+                char c = (char)data[i];
+                if (c == '\0') break;
+                if (isprint((unsigned char)c)) {
+                    putchar(c);
+                } else {
+                    putchar('.');
+                }
+            }
+            printf("\"\r\n");
+        } else {
+            printf("[READ] HATA: Okuma basarisiz.\r\n");
+        }
+    } else {
+        printf("[WRITE] Yaziliyor...\r\n");
+        if (MFRC522_MifareWriteBlock16(&rfid, selectedBlockAbs, writeBuffer) == STATUS_OK) {
+            uint8_t verify[16] = {0};
+            if (MFRC522_MifareReadBlock16(&rfid, selectedBlockAbs, verify) == STATUS_OK &&
+                memcmp(verify, writeBuffer, 16) == 0) {
+                printf("[WRITE] OK. Veri yazildi ve dogrulandi.\r\n");
             } else {
-                printf("[CARD] TOKEN YOK (Block %u)\r\n", b);
+                printf("[WRITE] HATA: Dogrulama basarisiz.\r\n");
             }
         } else {
-            printf("[CARD] TOKEN okunamadi. (READ hata) Block %u\r\n", b);
+            printf("[WRITE] HATA: Yazma basarisiz.\r\n");
         }
-
-        // Eğer terminalden PSWRD geldiyse aynı auth oturumunda yaz + verify
-        if (pendingWrite) {
-            printf("[WRITE] Token yaziliyor (Block %u)...\r\n", b);
-
-            if (MFRC522_MifareWriteBlock16(&rfid, b, pendingToken) == STATUS_OK) {
-                uint8_t ver[16] = {0};
-                if (MFRC522_MifareReadBlock16(&rfid, b, ver) == STATUS_OK &&
-                    memcmp(ver, pendingToken, 16) == 0)
-                {
-                    printf("[WRITE] OK. Sifre karta yazildi ve dogrulandi.\r\n");
-                    if (token_has_pw(ver)) print_token_pw(ver);
-                    pendingWrite = 0;
-                } else {
-                    printf("[WRITE] HATA: Dogrulama basarisiz.\r\n");
-                }
-            } else {
-                printf("[WRITE] HATA: Yazma basarisiz.\r\n");
-            }
-        }
-
-        // İşimiz bitti
-        break;
     }
 
-    // Crypto kapat + kartı HALT'a al
     MFRC522_StopCrypto1(&rfid);
     (void)MFRC522_PICC_HaltA(&rfid);
-
-    if (used_block == 0xFF) {
-        printf("[CARD] AUTH basarisiz: TOKEN_BLOCK ve Block1 ile auth yapilamadi.\r\n");
-    } else if (used_block != TOKEN_BLOCK) {
-        printf("[CARD] Not: TOKEN_BLOCK (%d) auth olmadi, Block %u kullanildi.\r\n", TOKEN_BLOCK, used_block);
-    }
-
-    printf("[CARD] Kart kaldirilinca devam...\r\n");
-    MFRC522_WaitCardRemoval(&rfid);
+    printf("Islem tamamlandi. Karti kaldirin...\r\n");
+    appState = APP_WAIT_REMOVE;
 }
 
 
@@ -271,10 +331,7 @@ int main(void)
 
 	MFRC522_Init(&rfid);
 
-	printf("\r\n=== PROJ-1 RFID TOKEN PROGRAM ===\r\n");
-	printf("Kart okut -> UID + token oku\r\n");
-	printf("Komut: PSWRD:mySecret123 (max 13 char)\r\n");
-	printf("Token block: %d\r\n\r\n", TOKEN_BLOCK);
+	print_welcome();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -285,8 +342,32 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 		handle_line();
-		process_card_once();
-		HAL_Delay(50);
+        if (appState == APP_WAIT_CARD) {
+            uint8_t atqa[2] = {0};
+            uint8_t uid_bcc[5] = {0};
+            uint8_t uid4[4] = {0};
+            uint8_t sak = 0;
+
+            if (MFRC522_PICC_WakeupA(&rfid, atqa) == STATUS_OK ||
+                MFRC522_PICC_RequestA(&rfid, atqa) == STATUS_OK) {
+                if (MFRC522_PICC_Anticoll_CL1(&rfid, uid_bcc) == STATUS_OK &&
+                    MFRC522_SelectCL1(&rfid, uid_bcc, &sak) == STATUS_OK) {
+                    memcpy(uid4, uid_bcc, 4);
+                    printf("\r\n[CARD] UID: %02X %02X %02X %02X\r\n",
+                           uid4[0], uid4[1], uid4[2], uid4[3]);
+                    printf("[CARD] ATQA: %02X %02X SAK: %02X\r\n", atqa[0], atqa[1], sak);
+                    appState = APP_ASK_ACTION;
+                    print_action_prompt();
+                }
+            }
+        } else if (appState == APP_DO_READ || appState == APP_DO_WRITE) {
+            process_card_operation();
+        } else if (appState == APP_WAIT_REMOVE) {
+            MFRC522_WaitCardRemoval(&rfid);
+            appState = APP_WAIT_CARD;
+            print_welcome();
+        }
+		HAL_Delay(30);
   }
   /* USER CODE END 3 */
 }
