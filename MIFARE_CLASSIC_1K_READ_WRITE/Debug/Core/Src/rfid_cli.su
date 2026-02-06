@@ -1,0 +1,11 @@
+../Core/Src/rfid_cli.c:7:13:uart_print	16	static
+../Core/Src/rfid_cli.c:12:13:uart_println	16	static
+../Core/Src/rfid_cli.c:18:12:uart_getc	24	static
+../Core/Src/rfid_cli.c:25:13:uart_readline	32	static
+../Core/Src/rfid_cli.c:50:13:parse_loc	48	static
+../Core/Src/rfid_cli.c:82:13:print_uid	152	static
+../Core/Src/rfid_cli.c:92:13:dump_block	288	static
+../Core/Src/rfid_cli.c:109:13:is_write_forbidden	16	static
+../Core/Src/rfid_cli.c:118:13:wait_card_present	16	static
+../Core/Src/rfid_cli.c:125:13:wait_card_removed	16	static
+../Core/Src/rfid_cli.c:133:6:RFID_CLI_Run	200	static
