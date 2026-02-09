@@ -1,2 +1,10 @@
 # RFID_RC522
 *İlgili projelerde kullanılmak üzere oluşturuldu.*
+Kullanılan Kart->F767ZI NUCLEO BOARD
+BAĞLANTILAR:
+SDA->PA4
+SCK->PA5
+MOSI->PA7
+MISO->PA6
+RST->PA3
+USART3 VURTUAL COM PORT ENABLE ->PD8,PD9
